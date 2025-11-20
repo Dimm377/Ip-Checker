@@ -1,4 +1,4 @@
-# IP Checker 2025
+# IP Checker
 
 Advanced IP address and domain analysis tool with modern security intelligence and comprehensive network data.
 
@@ -27,12 +27,14 @@ pip install requests
 ## How to Use
 
 ### Basic Usage
+
 ```bash
 python check_ip_2025.py 8.8.8.8
 python check_ip_2025.py google.com
 ```
 
 ### Advanced Usage
+
 ```bash
 # JSON output format
 python check_ip_2025.py 8.8.8.8 --format json
@@ -45,6 +47,7 @@ python check_ip_2025.py 8.8.8.8 --timeout 30
 ```
 
 ### Command Line Options
+
 - `target`: IP address or domain to analyze
 - `--format, -f`: Output format (text/json) [default: text]
 - `--no-cache`: Skip cache and fetch fresh data
@@ -53,11 +56,13 @@ python check_ip_2025.py 8.8.8.8 --timeout 30
 ## Example
 
 ### Text Output
+
 ```
 python check_ip_2025.py google.com
 ```
 
 ### JSON Output
+
 ```
 python check_ip_2025.py 8.8.8.8 --format json
 ```
@@ -65,6 +70,7 @@ python check_ip_2025.py 8.8.8.8 --format json
 ## Output Information
 
 You'll get comprehensive analysis including:
+
 - **Geolocation**: Country, region, city, coordinates, timezone, ISP
 - **Security**: Trust score, VPN/proxy/TOR detection, abuse reports
 - **ASN Details**: Autonomous System Number and organization
