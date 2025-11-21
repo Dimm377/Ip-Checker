@@ -69,8 +69,6 @@ python check_ip_2025.py 8.8.8.8 --format json
 
 ## Output Information
 
-You'll get comprehensive analysis including:
-
 - **Geolocation**: Country, region, city, coordinates, timezone, ISP
 - **Security**: Trust score, VPN/proxy/TOR detection, abuse reports
 - **ASN Details**: Autonomous System Number and organization
@@ -83,15 +81,6 @@ You'll get comprehensive analysis including:
 - **API Integration**: Supports AbuseIPDB API with environment variable `ABUSEIPDB_API_KEY`
 - **Caching**: Data cached in `~/.ip_checker_cache_2025/` for 24 hours
 - **Timeout**: Default request timeout is 15 seconds, configurable via CLI
-
-## 2025 Enhancements
-
-- **Enhanced Security**: Advanced threat intelligence and reputation scoring
-- **Global Coverage**: Improved geolocation accuracy with multiple data sources
-- **Enterprise Ready**: Structured JSON output for automation and integration
-- **Performance Optimized**: Smart caching and faster response times
-- **Privacy First**: Local-first approach with minimal data sharing
-- **Modern Architecture**: Type hints, error handling, and maintainable code
 
 ## Privacy
 
