@@ -9,7 +9,7 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 import hashlib
-import pickle
+import json
 import requests
 import ipaddress
 from urllib.parse import urlparse
@@ -28,33 +28,38 @@ def create_cache_key(ip):
 def get_cached_data(ip):
     create_cache_folder()
     cache_key = create_cache_key(ip)
-    cache_file = cache_folder / f"{cache_key}.pkl"
+    cache_file = cache_folder / f"{cache_key}.json"
 
     if cache_file.exists():
         try:
-            with open(cache_file, 'rb') as f:
-                cached_data = pickle.load(f)
-            timestamp = cached_data.get('timestamp')
-            if timestamp and datetime.now() - timestamp < cache_duration:
-                print(f"Using cached data for {ip}")
-                return cached_data
-        except:
+            with open(cache_file, 'r') as f:
+                cached_data = json.load(f)
+            
+            # Parse stored timestamp back to datetime object
+            timestamp_str = cached_data.get('timestamp')
+            if timestamp_str:
+                timestamp = datetime.fromisoformat(timestamp_str)
+                if datetime.now() - timestamp < cache_duration:
+                    print(f"Using cached data for {ip}")
+                    return cached_data
+        except Exception as e:
+            # If cache is corrupted, ignore it
             pass
     return None
 
 def save_to_cache(ip, data):
     create_cache_folder()
     cache_key = create_cache_key(ip)
-    cache_file = cache_folder / f"{cache_key}.pkl"
+    cache_file = cache_folder / f"{cache_key}.json"
 
     cache_data = {
-        'timestamp': datetime.now(),
+        'timestamp': datetime.now().isoformat(),
         'data': data
     }
 
     try:
-        with open(cache_file, 'wb') as f:
-            pickle.dump(cache_data, f)
+        with open(cache_file, 'w') as f:
+            json.dump(cache_data, f, indent=2)
     except Exception as e:
         print(f"Warning: Could not save cache: {e}")
 
@@ -81,37 +86,64 @@ def get_ip_geolocation_data(ip):
         print("Geolocation API returned invalid JSON")
         return None
 
+def get_tor_exit_nodes():
+    """Fetch the list of Tor exit nodes from the official Tor Project check list."""
+    cache_key = "tor_exit_nodes_list"
+    cached = get_cached_data(cache_key)
+    
+    if cached:
+        return set(cached['data'])
+
+    try:
+        url = "https://check.torproject.org/torbulkexitlist"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        
+        nodes = set(response.text.strip().splitlines())
+        save_to_cache(cache_key, list(nodes))
+        return nodes
+    except Exception as e:
+        print(f"Warning: Could not fetch Tor exit nodes: {e}")
+        return set()
+
 def get_threat_intel_data(ip):
+    # Import necessary module for env vars
+    import os
+    
     cached = get_cached_data(ip)
     if cached and cached['data'].get('threat_intel'):
         return cached['data']['threat_intel']
 
-    # Generate dummy data since we don't have a real API key
-    import random
-    trust_score = random.randint(0, 100)
-    is_vpn = random.choice([True, False]) if trust_score > 50 else False
-    is_proxy = random.choice([True, False]) if trust_score > 30 else False
-    is_hosting = True
+    # 1. Check if IP is a Tor Exit Node (Public Source - No Key needed)
+    tor_nodes = get_tor_exit_nodes()
+    is_tor = ip in tor_nodes
 
+    # 2. VirusTotal (Requires API Key)
+    vt_key = os.environ.get('VIRUSTOTAL_API_KEY')
+    vt_result = "N/A (No API Key)"
+    vt_score = None
+    
+    if vt_key:
+        try:
+            url = f"https://www.virustotal.com/api/v3/ip_addresses/{ip}"
+            headers = {"x-apikey": vt_key}
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                stats = data['data']['attributes']['last_analysis_stats']
+                vt_score = f"{stats['malicious']}/{stats['malicious'] + stats['harmless']}"
+                vt_result = "Malicious" if stats['malicious'] > 0 else "Clean"
+        except Exception as e:
+            vt_result = f"Error: {e}"
+
+    # Construct the result object (No Fake Data)
     result = {
         "ipAddress": ip,
-        "isPublic": True,
-        "ipVersion": 4,
-        "isWhitelisted": None,
-        "abuseConfidenceScore": trust_score,
-        "countryCode": "US",
-        "usageType": random.choice([
-            "Data Center/Web Hosting/Transit",
-            "Residential",
-            "Cellular",
-            "Commercial"
-        ]),
-        "isVpn": is_vpn,
-        "isTor": random.choice([True, False]) if trust_score > 75 else False,
-        "isProxy": is_proxy,
-        "isHosting": is_hosting,
-        "numReports": random.randint(0, trust_score // 10),
-        "lastReportedAt": datetime.now().strftime('%Y-%m-%dT%H:%M:%S+00:00') if trust_score > 20 else None
+        "isTor": is_tor,
+        "virusTotalAnalysis": vt_result,
+        "virusTotalScore": vt_score,
+        "abuseConfidenceScore": "N/A (Add ABUSEIPDB_API_KEY env var)",
+        "note": "Real-time checks performed. No random guesses."
     }
 
     cached_data = get_cached_data(ip) or {'data': {}}
@@ -282,13 +314,12 @@ def analyze_ip(ip, output_format='text'):
         print(f"\n THREAT INTELLIGENCE:")
         threat = analysis_result['threat_intel']
         if threat:
-            print(f"  Trust Score: {threat.get('abuseConfidenceScore', 'N/A')}/100")
-            print(f"  Usage Type: {threat.get('usageType', 'N/A')}")
-            print(f"  VPN: {threat.get('isVpn', 'N/A')}")
-            print(f"  TOR: {threat.get('isTor', 'N/A')}")
-            print(f"  Proxy: {threat.get('isProxy', 'N/A')}")
-            print(f"  Hosting Provider: {threat.get('isHosting', 'N/A')}")
-            print(f"  Reports: {threat.get('numReports', 'N/A')}")
+            print(f"  Is Tor Exit Node: {threat.get('isTor', 'N/A')}")
+            print(f"  VirusTotal Analysis: {threat.get('virusTotalAnalysis', 'N/A')}")
+            if threat.get('virusTotalScore'):
+                print(f"  VirusTotal Score: {threat.get('virusTotalScore')}")
+            print(f"  AbuseIPDB Score: {threat.get('abuseConfidenceScore', 'N/A')}")
+            print(f"  Note: {threat.get('note', '')}")
         else:
             print("  Failed to retrieve threat intelligence data")
 
